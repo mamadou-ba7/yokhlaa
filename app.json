@@ -1,0 +1,61 @@
+{
+  "expo": {
+    "name": "Yokh Laa",
+    "slug": "yokhlaa",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "backgroundColor": "#080A0D"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Yokh Laa utilise votre position pour vous connecter avec les passagers a proximite.",
+          "locationAlwaysPermission": "Yokh Laa a besoin de votre position en arriere-plan pour recevoir des courses.",
+          "locationWhenInUsePermission": "Yokh Laa utilise votre position pour trouver des chauffeurs proches.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#22C55E"
+        }
+      ]
+    ],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.yokhlaa.app",
+      "infoPlist": {
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Yokh Laa utilise votre position pour vous connecter avec les passagers a proximite.",
+        "NSLocationAlwaysUsageDescription": "Yokh Laa a besoin de votre position en arriere-plan pour recevoir des courses.",
+        "NSLocationWhenInUseUsageDescription": "Yokh Laa utilise votre position pour trouver des chauffeurs proches.",
+        "UIBackgroundModes": ["location", "fetch", "remote-notification"]
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#080A0D"
+      },
+      "package": "com.yokhlaa.app",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE"
+      ]
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}
