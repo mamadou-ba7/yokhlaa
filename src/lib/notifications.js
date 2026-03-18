@@ -36,8 +36,14 @@ export async function registerForPushNotifications(userId) {
   }
 
   try {
-    const projectId = Constants.expoConfig?.extra?.eas?.projectId
-      ?? Constants.easConfig?.projectId;
+    const projectId = process.env.EXPO_PUBLIC_EAS_PROJECT_ID
+      || Constants.expoConfig?.extra?.eas?.projectId
+      || Constants.easConfig?.projectId;
+
+    if (!projectId || projectId === 'set-via-EXPO_PUBLIC_EAS_PROJECT_ID') {
+      console.warn("EXPO_PUBLIC_EAS_PROJECT_ID manquant: push Expo desactive tant que la configuration EAS n'est pas definie");
+      return null;
+    }
 
     const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
     const token = tokenData.data;

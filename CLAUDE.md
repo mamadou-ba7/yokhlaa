@@ -98,12 +98,12 @@ All tables have RLS enabled. Key policies:
 
 ## Supabase Access
 - **Project ID:** oxzczrwsyvuavgevfhko
-- **API Endpoint:** https://fpjyfctwjiivusbzxmrg.supabase.co
-- **Management API Token:** sbp_86d355262e243f345f1f2f89bf26340cfed3771e
+- **API Endpoint:** Use `EXPO_PUBLIC_SUPABASE_URL` in your local `.env`
+- **Management API Token:** Use local env var `SUPABASE_MANAGEMENT_TOKEN` only
 - **SQL Execution:**
 ```bash
 curl -s -X POST "https://api.supabase.com/v1/projects/oxzczrwsyvuavgevfhko/database/query" \
-  -H "Authorization: Bearer sbp_86d355262e243f345f1f2f89bf26340cfed3771e" \
+  -H "Authorization: Bearer $SUPABASE_MANAGEMENT_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"query": "YOUR SQL HERE"}'
 ```
@@ -152,7 +152,7 @@ orange: '#FFB800'   // Warning/stars
 - Navigation via `navigation.navigate()` or `navigation.getParent()?.navigate()`
 
 ## Important Notes
-- Always run SQL migrations via Supabase Management API (token above)
+- Always run SQL migrations via Supabase Management API using local env var `SUPABASE_MANAGEMENT_TOKEN`
 - Build verification: `npx expo export --platform web` must pass
 - Never add new npm dependencies without checking Expo SDK compatibility
 - All new screens must be registered in App.js (both MainStack and AuthStack if needed)

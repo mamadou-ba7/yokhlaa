@@ -23,10 +23,10 @@ npx expo export --platform web      # Build check (MUST pass before any PR)
 
 ### Database
 Supabase project `oxzczrwsyvuavgevfhko`. Tables: profiles, rides, messages, subscriptions, waitlist.
-Run SQL migrations via Management API:
+Store credentials in local env files only (`.env`, `supabase/.env`) and run SQL migrations via Management API:
 ```bash
 curl -s -X POST "https://api.supabase.com/v1/projects/oxzczrwsyvuavgevfhko/database/query" \
-  -H "Authorization: Bearer sbp_86d355262e243f345f1f2f89bf26340cfed3771e" \
+  -H "Authorization: Bearer $SUPABASE_MANAGEMENT_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"query": "YOUR SQL HERE"}'
 ```
@@ -41,4 +41,4 @@ curl -s -X POST "https://api.supabase.com/v1/projects/oxzczrwsyvuavgevfhko/datab
 7. Register new screens in App.js (MainStack + AuthStack if public)
 8. Always verify build with `npx expo export --platform web`
 9. No class components, no external chart libs
-10. Always use Supabase Management API token for SQL migrations
+10. Always use the local `SUPABASE_MANAGEMENT_TOKEN` env var for SQL migrations
