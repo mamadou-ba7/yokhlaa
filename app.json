@@ -9,7 +9,9 @@
     "splash": {
       "backgroundColor": "#080A0D"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "plugins": [
       [
         "expo-location",
@@ -36,7 +38,11 @@
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Yokh Laa utilise votre position pour vous connecter avec les passagers a proximite.",
         "NSLocationAlwaysUsageDescription": "Yokh Laa a besoin de votre position en arriere-plan pour recevoir des courses.",
         "NSLocationWhenInUseUsageDescription": "Yokh Laa utilise votre position pour trouver des chauffeurs proches.",
-        "UIBackgroundModes": ["location", "fetch", "remote-notification"]
+        "UIBackgroundModes": [
+          "location",
+          "fetch",
+          "remote-notification"
+        ]
       }
     },
     "android": {
@@ -56,6 +62,13 @@
     },
     "web": {
       "bundler": "metro"
+    },
+    "scheme": "yokhlaa",
+    "extra": {
+      "appEnv": "local",
+      "eas": {
+        "projectId": "set-via-EXPO_PUBLIC_EAS_PROJECT_ID"
+      }
     }
   }
 }

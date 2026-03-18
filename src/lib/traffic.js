@@ -5,7 +5,7 @@
  * - Fallback OSRM si TomTom indisponible
  */
 
-const TOMTOM_API_KEY = '9w6L2Sw8M8eOnAWzsnD4IyPhLF9ul3aV';
+const TOMTOM_API_KEY = process.env.EXPO_PUBLIC_TOMTOM_API_KEY || 'VOTRE_CLE_TOMTOM';
 
 const OSRM_BASE = 'https://router.project-osrm.org/route/v1/driving';
 const TOMTOM_BASE = 'https://api.tomtom.com';
