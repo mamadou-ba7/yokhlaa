@@ -26,6 +26,8 @@ import RideDetailScreen from './src/screens/RideDetailScreen';
 import ChatScreen from './src/screens/ChatScreen';
 import DriverDashboardScreen from './src/screens/DriverDashboardScreen';
 import LiveTrackScreen from './src/screens/LiveTrackScreen';
+import DriverDocumentsScreen from './src/screens/DriverDocumentsScreen';
+import AdminScreen from './src/screens/AdminScreen';
 
 const COLORS = {
   black: '#080A0D',
@@ -38,29 +40,29 @@ const COLORS = {
 
 const Stack = createNativeStackNavigator();
 const PassengerTab = createBottomTabNavigator();
+const DriverTab = createBottomTabNavigator();
+
+const TAB_STYLE = {
+  backgroundColor: COLORS.card,
+  borderTopColor: COLORS.line,
+  borderTopWidth: 1,
+  height: 85,
+  paddingTop: 8,
+  paddingBottom: 28,
+};
 
 function PassengerTabs() {
   return (
     <PassengerTab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarStyle: {
-          backgroundColor: COLORS.card,
-          borderTopColor: COLORS.line,
-          borderTopWidth: 1,
-          height: 85,
-          paddingTop: 8,
-          paddingBottom: 28,
-        },
+        tabBarStyle: TAB_STYLE,
         tabBarActiveTintColor: COLORS.green,
         tabBarInactiveTintColor: COLORS.dim,
         tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
         tabBarIcon: ({ color }) => {
-          let iconName;
-          if (route.name === 'Course') iconName = 'car';
-          else if (route.name === 'Activite') iconName = 'time';
-          else if (route.name === 'Profil') iconName = 'person';
-          return <Ionicons name={iconName} size={22} color={color} />;
+          const icons = { Course: 'car', Activite: 'time', Profil: 'person' };
+          return <Ionicons name={icons[route.name]} size={22} color={color} />;
         },
       })}
     >
@@ -68,6 +70,29 @@ function PassengerTabs() {
       <PassengerTab.Screen name="Activite" component={ActivityScreen} />
       <PassengerTab.Screen name="Profil" component={ProfileScreen} />
     </PassengerTab.Navigator>
+  );
+}
+
+function DriverTabs() {
+  return (
+    <DriverTab.Navigator
+      screenOptions={({ route }) => ({
+        headerShown: false,
+        tabBarStyle: TAB_STYLE,
+        tabBarActiveTintColor: COLORS.green,
+        tabBarInactiveTintColor: COLORS.dim,
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+        tabBarIcon: ({ color }) => {
+          const icons = { Courses: 'car', Tableau: 'stats-chart', Historique: 'time', Profil: 'person' };
+          return <Ionicons name={icons[route.name]} size={22} color={color} />;
+        },
+      })}
+    >
+      <DriverTab.Screen name="Courses" component={DriverScreen} />
+      <DriverTab.Screen name="Tableau" component={DriverDashboardScreen} />
+      <DriverTab.Screen name="Historique" component={ActivityScreen} />
+      <DriverTab.Screen name="Profil" component={ProfileScreen} />
+    </DriverTab.Navigator>
   );
 }
 
@@ -95,6 +120,7 @@ function AuthStack() {
 function MainStack() {
   const { profile, isGuest } = useAuth();
   const isDriver = profile?.role === 'chauffeur';
+  const isAdmin = profile?.role === 'admin';
   const hasRole = !!profile?.role;
 
   // Les invités vont directement en mode passager
@@ -110,8 +136,10 @@ function MainStack() {
     >
       {showRoleSelect ? (
         <Stack.Screen name="RoleSelect" component={RoleSelectScreen} />
+      ) : isAdmin ? (
+        <Stack.Screen name="AdminMain" component={AdminScreen} />
       ) : isDriver ? (
-        <Stack.Screen name="DriverMain" component={DriverScreen} />
+        <Stack.Screen name="DriverMain" component={DriverTabs} />
       ) : (
         <Stack.Screen name="PassengerMain" component={PassengerTabs} />
       )}
@@ -119,6 +147,7 @@ function MainStack() {
       <Stack.Screen name="RideDetail" component={RideDetailScreen} />
       <Stack.Screen name="Chat" component={ChatScreen} options={{ animation: 'slide_from_bottom' }} />
       <Stack.Screen name="DriverDashboard" component={DriverDashboardScreen} />
+      <Stack.Screen name="DriverDocuments" component={DriverDocumentsScreen} />
       <Stack.Screen name="LiveTrack" component={LiveTrackScreen} />
       <Stack.Screen name="About" component={AboutScreen} />
       <Stack.Screen name="Help" component={HelpScreen} />

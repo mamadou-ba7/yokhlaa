@@ -291,7 +291,7 @@ export default function DriverDashboardScreen({ navigation }) {
                     <TouchableOpacity
                       style={styles.recentItem}
                       activeOpacity={0.7}
-                      onPress={() => { tapLight(); navigation.navigate('RideDetail', { rideId: r.id }); }}
+                      onPress={() => { tapLight(); (navigation.getParent() || navigation).navigate('RideDetail', { rideId: r.id }); }}
                     >
                       <View style={{ flex: 1 }}>
                         <Text style={styles.recentDest} numberOfLines={1}>

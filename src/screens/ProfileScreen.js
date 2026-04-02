@@ -10,7 +10,7 @@ import AnimatedScreen, { AnimatedListItem } from '../components/AnimatedScreen';
 import { tapLight } from '../lib/haptics';
 
 export default function ProfileScreen({ navigation }) {
-  const { user, profile, signOut } = useAuth();
+  const { user, profile, signOut, switchRole } = useAuth();
 
   const handleSignOut = async () => {
     await signOut();
@@ -22,8 +22,25 @@ export default function ProfileScreen({ navigation }) {
     }
   };
 
+  const isDriver = profile?.role === 'chauffeur';
+
+  const handleSwitchRole = async () => {
+    tapLight();
+    const newRole = isDriver ? 'passager' : 'chauffeur';
+    const label = isDriver ? 'passager' : 'chauffeur';
+    try {
+      await switchRole(newRole);
+    } catch (e) {
+      // If no driver info yet, prompt
+      if (!isDriver && !profile?.vehicule) {
+        navigation.getParent()?.navigate('RoleSelect');
+      }
+    }
+  };
+
   const menuItems = [
     { icon: 'person-outline', label: 'Informations personnelles', screen: 'EditProfile' },
+    ...(isDriver ? [{ icon: 'document-text-outline', label: 'Mes documents', screen: 'DriverDocuments' }] : []),
     { icon: 'help-circle-outline', label: 'Aide', screen: 'Help' },
     { icon: 'information-circle-outline', label: 'A propos', screen: 'About' },
   ];
@@ -76,6 +93,18 @@ export default function ProfileScreen({ navigation }) {
             </AnimatedListItem>
           ))}
         </View>
+
+        {/* Switch role — only for registered drivers */}
+        {user && profile?.vehicule && profile?.plaque && (
+          <TouchableOpacity style={styles.switchBtn} onPress={handleSwitchRole} activeOpacity={0.7}>
+            <Ionicons name={isDriver ? 'person' : 'car'} size={20} color={COLORS.green} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.switchText}>Passer en mode {isDriver ? 'passager' : 'chauffeur'}</Text>
+              <Text style={styles.switchSub}>{isDriver ? 'Commander une course' : 'Recevoir des courses'}</Text>
+            </View>
+            <Ionicons name="swap-horizontal" size={20} color={COLORS.green} />
+          </TouchableOpacity>
+        )}
 
         {/* Sign out */}
         <TouchableOpacity style={styles.signOutBtn} onPress={handleSignOut} activeOpacity={0.7}>
@@ -135,6 +164,15 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surface, alignItems: 'center', justifyContent: 'center',
   },
   menuLabel: { flex: 1, fontSize: 15, color: COLORS.white },
+  switchBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    marginHorizontal: 20, paddingVertical: 16, paddingHorizontal: 18,
+    borderRadius: 14, borderWidth: 1,
+    borderColor: 'rgba(34,197,94,0.2)', backgroundColor: 'rgba(34,197,94,0.05)',
+    marginBottom: 12,
+  },
+  switchText: { fontSize: 15, fontWeight: '600', color: COLORS.green },
+  switchSub: { fontSize: 12, color: COLORS.dim, marginTop: 2 },
   signOutBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     marginHorizontal: 20, paddingVertical: 16,

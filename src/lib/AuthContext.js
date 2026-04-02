@@ -128,6 +128,24 @@ export function AuthProvider({ children }) {
     setIsGuest(false);
   };
 
+  // Changer de rôle (passager ↔ chauffeur)
+  const switchRole = async (newRole) => {
+    if (!user) return;
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .update({ role: newRole, updated_at: new Date().toISOString() })
+        .eq('id', user.id)
+        .select()
+        .single();
+      if (error) throw error;
+      setProfile(data);
+    } catch (e) {
+      console.warn('Switch role error:', e);
+      throw e;
+    }
+  };
+
   // Déconnexion
   const signOut = async () => {
     if (isGuest) {
@@ -151,6 +169,7 @@ export function AuthProvider({ children }) {
       verifyOTP,
       createProfile,
       updateLocation,
+      switchRole,
       enterGuestMode,
       exitGuestMode,
       signOut,

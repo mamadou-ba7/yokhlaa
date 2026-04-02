@@ -15,7 +15,8 @@ import RatingModal from '../components/RatingModal';
 import { registerForPushNotifications, notifyDriversOfNewRide, notifyDriverRideCancelled } from '../lib/notifications';
 import { getRouteWithTraffic, calculatePrice, getTrafficLevel } from '../lib/traffic';
 import { getSearchHistory, addToSearchHistory, clearSearchHistory, POPULAR_PLACES } from '../lib/searchHistory';
-import { tapLight, selectionChanged } from '../lib/haptics';
+import { tapLight, tapMedium, selectionChanged } from '../lib/haptics';
+import { reportDriverMismatch } from '../lib/driverVerification';
 
 const PAYMENT_METHODS = [
   { id: 'cash', name: 'Especes', icon: 'cash-outline' },
@@ -47,7 +48,7 @@ const RIDE_CLASSES = [
 
 // ──────────────────────────────────────────────
 export default function PassengerMapScreen({ navigation }) {
-  const { user } = useAuth();
+  const { user, profile, switchRole } = useAuth();
   const [loc, setLoc] = useState(null);
   const [dest, setDest] = useState(null);
   const [search, setSearch] = useState('');
@@ -73,6 +74,7 @@ export default function PassengerMapScreen({ navigation }) {
   const [surgeActive, setSurgeActive] = useState(false);
   const [surgeMult, setSurgeMult] = useState(1);
   const [searchHistory, setSearchHistory] = useState([]);
+  const [searchingPickup, setSearchingPickup] = useState(false); // true = editing pickup, false = editing destination
   const pulse = useRef(new Animated.Value(1)).current;
   const pulseRef = useRef(null);
   const timer = useRef(null);
@@ -271,9 +273,26 @@ export default function PassengerMapScreen({ navigation }) {
     }, 350);
   };
 
+  const pickPickup = (p) => {
+    selectionChanged();
+    const newLoc = { latitude: p.lat, longitude: p.lng };
+    setLoc(newLoc);
+    setPickupAddress(p.name);
+    setSearch(''); setShowSearch(false); setSearchingPickup(false);
+    // Recalculate route if destination already set
+    if (dest) {
+      const k = haversine(p.lat, p.lng, dest.lat, dest.lng);
+      setKm(Math.round(k * 10) / 10);
+      setBasePrice(calcPrice(k));
+      setEta(Math.max(3, Math.round(k * 4)));
+      fetchTrafficRoute(p.lat, p.lng, dest.lat, dest.lng);
+      setStatus('confirm');
+    }
+  };
+
   const pickDest = (d) => {
     selectionChanged();
-    setDest(d); setSearch(d.name); setShowSearch(false);
+    setDest(d); setSearch(d.name); setShowSearch(false); setSearchingPickup(false);
     // Save to history
     addToSearchHistory(d).then(setSearchHistory);
     if (loc) {
@@ -472,6 +491,42 @@ export default function PassengerMapScreen({ navigation }) {
     );
   };
 
+  const handleReport = () => {
+    tapLight();
+    Alert.alert(
+      'Signaler un probleme',
+      'Que souhaitez-vous signaler ?',
+      [
+        {
+          text: 'Ce n\'est pas le bon chauffeur',
+          onPress: () => submitReport('wrong_driver', 'Le chauffeur ne correspond pas a la photo'),
+        },
+        {
+          text: 'Ce n\'est pas le bon vehicule',
+          onPress: () => submitReport('wrong_vehicle', 'Le vehicule ne correspond pas a celui enregistre'),
+        },
+        {
+          text: 'Je ne me sens pas en securite',
+          onPress: () => submitReport('unsafe', 'Passager ne se sent pas en securite'),
+        },
+        { text: 'Annuler', style: 'cancel' },
+      ],
+    );
+  };
+
+  const submitReport = async (type, desc) => {
+    if (!ride?.id || !user?.id) return;
+    const ok = await reportDriverMismatch(ride.id, user.id, type, desc);
+    if (ok) {
+      Alert.alert(
+        'Signalement envoye',
+        'Notre equipe va examiner votre signalement. Si vous etes en danger, appelez le 17.',
+      );
+    } else {
+      Alert.alert('Erreur', 'Impossible d\'envoyer le signalement. Reessayez.');
+    }
+  };
+
   const setSavedAddress = (type) => {
     const addr = savedAddresses[type];
     if (addr) {
@@ -502,10 +557,10 @@ export default function PassengerMapScreen({ navigation }) {
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           {/* Header */}
           <View style={s.shdr}>
-            <TouchableOpacity onPress={() => setShowSearch(false)} style={s.shdrBack}>
+            <TouchableOpacity onPress={() => { setShowSearch(false); setSearchingPickup(false); }} style={s.shdrBack}>
               <Ionicons name="arrow-back" size={22} color={COLORS.white} />
             </TouchableOpacity>
-            <Text style={s.shdrTitle}>Destination</Text>
+            <Text style={s.shdrTitle}>{searchingPickup ? 'Point de depart' : 'Destination'}</Text>
             <View style={{ width: 38 }} />
           </View>
 
@@ -515,33 +570,91 @@ export default function PassengerMapScreen({ navigation }) {
               <View style={s.sdotG} /><View style={s.sdotLine} /><View style={s.sdotR} />
             </View>
             <View style={{ flex: 1 }}>
-              <View style={s.sfieldRow}>
-                <Ionicons name="radio-button-on" size={10} color={COLORS.green} />
-                <Text style={s.sfieldFixed} numberOfLines={1}>{pickupAddress}</Text>
-              </View>
+              {searchingPickup ? (
+                <View style={s.sfieldRow}>
+                  <Ionicons name="radio-button-on" size={10} color={COLORS.green} />
+                  <TextInput
+                    style={s.sinput}
+                    value={search}
+                    onChangeText={onSearch}
+                    placeholder="Modifier le depart"
+                    placeholderTextColor={COLORS.dim2}
+                    autoFocus
+                    returnKeyType="search"
+                  />
+                  {search.length > 0 && (
+                    <TouchableOpacity onPress={() => { setSearch(''); setResults([]); setSearchError(false); }}>
+                      <Ionicons name="close-circle" size={18} color={COLORS.dim} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ) : (
+                <TouchableOpacity style={s.sfieldRow} onPress={() => { setSearchingPickup(true); setSearch(''); setResults([]); }} activeOpacity={0.7}>
+                  <Ionicons name="radio-button-on" size={10} color={COLORS.green} />
+                  <Text style={s.sfieldFixed} numberOfLines={1}>{pickupAddress}</Text>
+                  <Ionicons name="create-outline" size={14} color={COLORS.dim} />
+                </TouchableOpacity>
+              )}
               <View style={s.sdivider} />
-              <View style={s.sfieldRow}>
-                <Ionicons name="location" size={10} color={COLORS.red} />
-                <TextInput
-                  style={s.sinput}
-                  value={search}
-                  onChangeText={onSearch}
-                  placeholder="Ou allez-vous ?"
-                  placeholderTextColor={COLORS.dim2}
-                  autoFocus
-                  returnKeyType="search"
-                />
-                {search.length > 0 && (
-                  <TouchableOpacity onPress={() => { setSearch(''); setResults([]); setSearchError(false); }}>
-                    <Ionicons name="close-circle" size={18} color={COLORS.dim} />
-                  </TouchableOpacity>
-                )}
-              </View>
+              {searchingPickup ? (
+                <TouchableOpacity style={s.sfieldRow} onPress={() => { setSearchingPickup(false); setSearch(''); setResults([]); }} activeOpacity={0.7}>
+                  <Ionicons name="location" size={10} color={COLORS.red} />
+                  <Text style={s.sfieldFixed} numberOfLines={1}>{dest?.name || 'Ou allez-vous ?'}</Text>
+                </TouchableOpacity>
+              ) : (
+                <View style={s.sfieldRow}>
+                  <Ionicons name="location" size={10} color={COLORS.red} />
+                  <TextInput
+                    style={s.sinput}
+                    value={search}
+                    onChangeText={onSearch}
+                    placeholder="Ou allez-vous ?"
+                    placeholderTextColor={COLORS.dim2}
+                    autoFocus
+                    returnKeyType="search"
+                  />
+                  {search.length > 0 && (
+                    <TouchableOpacity onPress={() => { setSearch(''); setResults([]); setSearchError(false); }}>
+                      <Ionicons name="close-circle" size={18} color={COLORS.dim} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
             </View>
           </View>
 
           {/* Results */}
           <ScrollView style={s.slist} keyboardShouldPersistTaps="handled">
+            {/* GPS position shortcut (pickup mode) */}
+            {searchingPickup && (
+              <TouchableOpacity style={s.sresult} onPress={async () => {
+                tapLight();
+                try {
+                  const r = await Location.getCurrentPositionAsync({});
+                  const coords = { latitude: r.coords.latitude, longitude: r.coords.longitude };
+                  setLoc(coords);
+                  reverseGeocode(coords.latitude, coords.longitude);
+                  setSearch(''); setShowSearch(false); setSearchingPickup(false);
+                  if (dest) {
+                    const k = haversine(coords.latitude, coords.longitude, dest.lat, dest.lng);
+                    setKm(Math.round(k * 10) / 10);
+                    setBasePrice(calcPrice(k));
+                    setEta(Math.max(3, Math.round(k * 4)));
+                    fetchTrafficRoute(coords.latitude, coords.longitude, dest.lat, dest.lng);
+                    setStatus('confirm');
+                  }
+                } catch (e) { console.warn('GPS error:', e); }
+              }}>
+                <View style={[s.sresultIcon, { backgroundColor: COLORS.greenLight }]}>
+                  <Ionicons name="navigate" size={16} color={COLORS.green} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.sresultName}>Ma position GPS</Text>
+                  <Text style={s.sresultArea}>Utiliser la localisation actuelle</Text>
+                </View>
+              </TouchableOpacity>
+            )}
+
             {/* Saved addresses */}
             <View style={s.ssaved}>
               <TouchableOpacity style={s.ssavedItem} onPress={() => setSavedAddress('home')}>
@@ -578,7 +691,7 @@ export default function PassengerMapScreen({ navigation }) {
                   </TouchableOpacity>
                 </View>
                 {searchHistory.map((h, i) => (
-                  <TouchableOpacity key={`h-${i}`} style={s.sresult} onPress={() => pickDest(h)}>
+                  <TouchableOpacity key={`h-${i}`} style={s.sresult} onPress={() => searchingPickup ? pickPickup(h) : pickDest(h)}>
                     <View style={[s.sresultIcon, { backgroundColor: 'rgba(74,144,255,0.08)' }]}>
                       <Ionicons name="time" size={16} color="#4A90FF" />
                     </View>
@@ -600,7 +713,7 @@ export default function PassengerMapScreen({ navigation }) {
                   <Text style={s.sectionTitle}>Lieux populaires</Text>
                 </View>
                 {POPULAR_PLACES.map((p, i) => (
-                  <TouchableOpacity key={`p-${i}`} style={s.sresult} onPress={() => pickDest(p)}>
+                  <TouchableOpacity key={`p-${i}`} style={s.sresult} onPress={() => searchingPickup ? pickPickup(p) : pickDest(p)}>
                     <View style={[s.sresultIcon, { backgroundColor: COLORS.greenLight }]}>
                       <Ionicons name={p.icon || 'location'} size={16} color={COLORS.green} />
                     </View>
@@ -626,7 +739,7 @@ export default function PassengerMapScreen({ navigation }) {
             )}
 
             {results.map((r, i) => (
-              <TouchableOpacity key={`r-${i}`} style={s.sresult} onPress={() => pickDest(r)}>
+              <TouchableOpacity key={`r-${i}`} style={s.sresult} onPress={() => searchingPickup ? pickPickup(r) : pickDest(r)}>
                 <View style={s.sresultIcon}><Ionicons name="location" size={16} color={COLORS.green} /></View>
                 <View style={{ flex: 1 }}>
                   <Text style={s.sresultName} numberOfLines={1}>{r.name}</Text>
@@ -674,12 +787,31 @@ export default function PassengerMapScreen({ navigation }) {
         />
       </View>
 
-      {/* Top overlay */}
+      {/* Top overlay — Uber-style mode switcher */}
       <View style={s.top}>
         <TouchableOpacity style={s.topBtn} onPress={() => navigation.openDrawer?.()}>
           <Ionicons name="menu" size={20} color={COLORS.white} />
         </TouchableOpacity>
-        <Text style={s.topGreet}>{greet()} !</Text>
+
+        {profile?.vehicule && profile?.plaque ? (
+          <View style={s.modeSwitcher}>
+            <View style={[s.modeOption, s.modeActive]}>
+              <Ionicons name="person" size={14} color="#fff" />
+              <Text style={s.modeActiveTxt}>Se deplacer</Text>
+            </View>
+            <TouchableOpacity
+              style={s.modeOption}
+              onPress={() => { tapMedium(); switchRole('chauffeur'); }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="car" size={14} color={COLORS.dim} />
+              <Text style={s.modeTxt}>Conduire</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <Text style={s.topGreet}>{greet()} !</Text>
+        )}
+
         <TouchableOpacity style={s.topBtn}>
           <Ionicons name="notifications-outline" size={18} color={COLORS.white} />
         </TouchableOpacity>
@@ -712,10 +844,12 @@ export default function PassengerMapScreen({ navigation }) {
           <View style={s.routeBar}>
             <View style={s.routeDots}><View style={s.sdotG} /><View style={[s.sdotLine, { height: 10 }]} /><View style={s.sdotR} /></View>
             <View style={{ flex: 1 }}>
-              <Text style={s.routeFrom} numberOfLines={1}>Ma position</Text>
+              <TouchableOpacity onPress={() => { setSearchingPickup(true); setSearch(''); setResults([]); setShowSearch(true); }} activeOpacity={0.7}>
+                <Text style={s.routeFrom} numberOfLines={1}>{pickupAddress} <Ionicons name="create-outline" size={11} color={COLORS.dim} /></Text>
+              </TouchableOpacity>
               <Text style={s.routeTo} numberOfLines={1}>{dest.name}</Text>
             </View>
-            <TouchableOpacity onPress={() => { setDest(null); setStatus('idle'); setShowSearch(true); }}>
+            <TouchableOpacity onPress={() => { setDest(null); setStatus('idle'); setSearchingPickup(false); setShowSearch(true); }}>
               <Ionicons name="create-outline" size={18} color={COLORS.dim} />
             </TouchableOpacity>
           </View>
@@ -860,12 +994,20 @@ export default function PassengerMapScreen({ navigation }) {
             )}
           </View>
 
-          {/* SOS Button during ride */}
-          {status === 'trip' && (
-            <TouchableOpacity style={s.sosBtn} onPress={handleSOS}>
-              <Ionicons name="alert-circle" size={16} color="#fff" />
-              <Text style={s.sosTxt}>SOS Urgence</Text>
-            </TouchableOpacity>
+          {/* Safety row */}
+          {(status === 'matched' || status === 'arriving' || status === 'trip') && (
+            <View style={s.safetyRow}>
+              <TouchableOpacity style={s.reportBtn} onPress={handleReport} activeOpacity={0.7}>
+                <Ionicons name="flag" size={14} color="#FFB800" />
+                <Text style={s.reportTxt}>Signaler</Text>
+              </TouchableOpacity>
+              {status === 'trip' && (
+                <TouchableOpacity style={s.sosBtn} onPress={handleSOS}>
+                  <Ionicons name="alert-circle" size={14} color="#fff" />
+                  <Text style={s.sosTxt}>SOS Urgence</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           )}
         </View>
       )}
@@ -904,6 +1046,22 @@ const s = StyleSheet.create({
     fontSize: 16, fontWeight: '700', color: COLORS.white,
     textShadowColor: 'rgba(0,0,0,0.9)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 6,
   },
+
+  // Uber-style mode switcher
+  modeSwitcher: {
+    flexDirection: 'row', backgroundColor: 'rgba(8,10,13,0.85)',
+    borderRadius: 25, padding: 3,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+  },
+  modeOption: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingVertical: 8, paddingHorizontal: 14, borderRadius: 22,
+  },
+  modeActive: {
+    backgroundColor: COLORS.green,
+  },
+  modeActiveTxt: { fontSize: 13, fontWeight: '700', color: '#fff' },
+  modeTxt: { fontSize: 13, fontWeight: '600', color: COLORS.dim },
 
   // Sheet
   sheet: {
@@ -1063,10 +1221,19 @@ const s = StyleSheet.create({
   },
   surgeTxt: { fontSize: 11, fontWeight: '700', color: '#fff' },
 
-  // SOS
+  // Safety row
+  safetyRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8,
+  },
+  reportBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    paddingVertical: 12, borderRadius: 12,
+    backgroundColor: 'rgba(255,184,0,0.08)', borderWidth: 1, borderColor: 'rgba(255,184,0,0.2)',
+  },
+  reportTxt: { fontSize: 13, fontWeight: '700', color: '#FFB800' },
   sosBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-    paddingVertical: 12, borderRadius: 12, marginTop: 8,
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    paddingVertical: 12, borderRadius: 12,
     backgroundColor: 'rgba(239,68,68,0.12)', borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)',
   },
   sosTxt: { fontSize: 13, fontWeight: '700', color: COLORS.red },

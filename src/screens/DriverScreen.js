@@ -20,7 +20,7 @@ import { tapHeavy, tapMedium, tapLight, notifySuccess, notifyError, notifyWarnin
 const DAKAR = { latitude: 14.7167, longitude: -17.4677 };
 
 export default function DriverScreen({ navigation }) {
-  const { user } = useAuth();
+  const { user, profile, switchRole } = useAuth();
   const [isOnline, setIsOnline] = useState(false);
   const [loc, setLoc] = useState(DAKAR);
   const [pending, setPending] = useState(null);
@@ -173,14 +173,16 @@ export default function DriverScreen({ navigation }) {
   };
 
   const toggleOnline = () => {
-    const next = !isOnline;
     tapMedium();
-    setIsOnline(next);
-    if (next) {
-      startTracking();
-    } else {
+
+    if (isOnline) {
+      setIsOnline(false);
       stopTracking();
+      return;
     }
+
+    setIsOnline(true);
+    startTracking();
   };
 
   const checkPending = async () => {
@@ -312,16 +314,27 @@ export default function DriverScreen({ navigation }) {
       <View style={s.map}><DakarMap userLocation={loc} destination={rideDest} /></View>
 
       <View style={s.top}>
-        <TouchableOpacity style={s.topBtn} onPress={() => {
-          if (isOnline) stopTracking();
-          if (navigation.canGoBack()) navigation.goBack();
-          else navigation.reset({ index: 0, routes: [{ name: 'RoleSelect' }] });
-        }}>
-          <Ionicons name="arrow-back" size={20} color={COLORS.white} />
-        </TouchableOpacity>
-        <Text style={s.topTitle}>Yokh<Text style={{ color: COLORS.green }}>Laa</Text> Chauffeur</Text>
-        <TouchableOpacity style={s.topBtn} onPress={() => { tapLight(); navigation.navigate('DriverDashboard'); }}>
+        <TouchableOpacity style={s.topBtn} onPress={() => { tapLight(); (navigation.getParent() || navigation).navigate('DriverDashboard'); }}>
           <Ionicons name="stats-chart" size={20} color={COLORS.white} />
+        </TouchableOpacity>
+
+        <View style={s.modeSwitcher}>
+          <TouchableOpacity
+            style={s.modeOption}
+            onPress={() => { tapMedium(); if (isOnline) stopTracking(); switchRole('passager'); }}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="person" size={14} color={COLORS.dim} />
+            <Text style={s.modeTxt}>Se deplacer</Text>
+          </TouchableOpacity>
+          <View style={[s.modeOption, s.modeActive]}>
+            <Ionicons name="car" size={14} color="#fff" />
+            <Text style={s.modeActiveTxt}>Conduire</Text>
+          </View>
+        </View>
+
+        <TouchableOpacity style={s.topBtn}>
+          <Ionicons name="notifications-outline" size={18} color={COLORS.white} />
         </TouchableOpacity>
       </View>
 
@@ -355,7 +368,7 @@ export default function DriverScreen({ navigation }) {
                 style={s.chatBtn}
                 onPress={() => {
                   tapLight();
-                  navigation.navigate('Chat', {
+                  (navigation.getParent() || navigation).navigate('Chat', {
                     rideId: ride.id,
                     otherName: 'Passager',
                     otherRole: 'passager',
@@ -401,6 +414,18 @@ const s = StyleSheet.create({
   top: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: Platform.OS === 'ios' ? 54 : 38, paddingHorizontal: 16, paddingBottom: 8 },
   topBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(8,10,13,0.7)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
   topTitle: { fontSize: 15, fontWeight: '800', color: COLORS.white },
+  modeSwitcher: {
+    flexDirection: 'row', backgroundColor: 'rgba(8,10,13,0.85)',
+    borderRadius: 25, padding: 3,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+  },
+  modeOption: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingVertical: 8, paddingHorizontal: 14, borderRadius: 22,
+  },
+  modeActive: { backgroundColor: COLORS.green },
+  modeActiveTxt: { fontSize: 13, fontWeight: '700', color: '#fff' },
+  modeTxt: { fontSize: 13, fontWeight: '600', color: COLORS.dim },
   sheet: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: COLORS.black, borderTopLeftRadius: 20, borderTopRightRadius: 20, borderTopWidth: 1, borderColor: COLORS.line, paddingHorizontal: 20, paddingBottom: Platform.OS === 'ios' ? 34 : 24 },
   handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: COLORS.dim2, alignSelf: 'center', marginTop: 10, marginBottom: 14 },
   toggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.line, borderRadius: 14, padding: 15, marginBottom: 14 },

@@ -42,16 +42,11 @@ function WebMap({ userLocation, destination, nearbyDrivers, driverLocation, onRo
       attributionControl: false,
     }).setView([lat, lng], 14);
 
-    // OSM tiles with custom dark styling via CSS
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
+    // CartoDB Dark Matter — clean dark tiles like Uber/Bolt
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      maxZoom: 20,
+      subdomains: 'abcd',
     }).addTo(m);
-
-    // Dark mode: invert + tweak for a clean Uber-like dark map
-    const tilePane = mapRef.current.querySelector('.leaflet-tile-pane');
-    if (tilePane) {
-      tilePane.style.filter = 'invert(1) hue-rotate(200deg) brightness(0.85) contrast(1.2) saturate(0.15)';
-    }
 
     // User marker - blue pulse
     const userIcon = L.divIcon({
