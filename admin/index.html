@@ -275,9 +275,11 @@ tr:last-child td { border-bottom: none; }
   <div class="login-box">
     <h1>Yokh<span>Laa</span></h1>
     <p>Administration de la plateforme</p>
-    <input type="text" id="login-code" placeholder="Code administrateur" autocomplete="off">
+    <input type="email" id="login-email" placeholder="Email administrateur" autocomplete="email">
+    <input type="password" id="login-password" placeholder="Mot de passe" autocomplete="current-password">
     <button id="login-btn" onclick="handleLogin()">Connexion</button>
     <div id="login-error" class="login-error"></div>
+    <p style="color:var(--dim);font-size:12px;margin-top:12px;">Premiere connexion ? Utilisez le meme email/mot de passe pour creer votre compte.</p>
   </div>
 </div>
 
@@ -427,7 +429,6 @@ const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 let currentUser = null;
-let loginStep = 'phone';
 
 // ── AUTH ──────────────────────────────────────────
 async function handleLogin() {
@@ -435,43 +436,57 @@ async function handleLogin() {
   const err = document.getElementById('login-error');
   err.textContent = '';
   btn.disabled = true;
+  btn.textContent = 'Connexion...';
 
-  if (loginStep === 'phone') {
-    const phone = document.getElementById('login-phone').value.replace(/\s/g, '');
-    if (!phone.match(/^\+221[0-9]{9}$/)) {
-      err.textContent = 'Format: +221 7X XXX XX XX';
-      btn.disabled = false; return;
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+
+  if (!email || !password) {
+    err.textContent = 'Email et mot de passe requis';
+    btn.disabled = false; btn.textContent = 'Connexion'; return;
+  }
+  if (password.length < 6) {
+    err.textContent = 'Mot de passe: 6 caracteres minimum';
+    btn.disabled = false; btn.textContent = 'Connexion'; return;
+  }
+
+  try {
+    // Try sign in first
+    let { data, error } = await sb.auth.signInWithPassword({ email, password });
+
+    // If user doesn't exist, try sign up (first-time setup)
+    if (error && (error.message.includes('Invalid login') || error.message.includes('invalid'))) {
+      const signup = await sb.auth.signUp({ email, password });
+      if (signup.error) throw signup.error;
+      data = signup.data;
+      // Set admin role in profiles
+      if (data.user) {
+        await sb.from('profiles').upsert({
+          id: data.user.id,
+          role: 'admin',
+          nom: 'Administrateur'
+        });
+      }
+    } else if (error) {
+      throw error;
     }
-    try {
-      const { error } = await sb.auth.signInWithOtp({ phone });
-      if (error) throw error;
-      document.getElementById('login-otp').style.display = 'block';
-      btn.textContent = 'Verifier le code';
-      loginStep = 'otp';
-    } catch (e) {
-      err.textContent = e.message;
-    }
-  } else {
-    const phone = document.getElementById('login-phone').value.replace(/\s/g, '');
-    const token = document.getElementById('login-otp').value;
-    if (!token || token.length !== 6) { err.textContent = 'Code a 6 chiffres'; btn.disabled = false; return; }
-    try {
-      const { data, error } = await sb.auth.verifyOtp({ phone, token, type: 'sms' });
-      if (error) throw error;
-      // Check admin role
+
+    // Verify admin role
+    if (data?.user) {
       const { data: profile } = await sb.from('profiles').select('role').eq('id', data.user.id).single();
       if (profile?.role !== 'admin') {
         err.textContent = 'Acces refuse. Ce compte n\'est pas administrateur.';
         await sb.auth.signOut();
-        btn.disabled = false; return;
+        btn.disabled = false; btn.textContent = 'Connexion'; return;
       }
       currentUser = data.user;
       showApp();
-    } catch (e) {
-      err.textContent = e.message;
     }
+  } catch (e) {
+    err.textContent = e.message || 'Erreur de connexion';
   }
   btn.disabled = false;
+  btn.textContent = 'Connexion';
 }
 
 async function checkSession() {

@@ -48,6 +48,14 @@ function WebMap({ userLocation, destination, nearbyDrivers, driverLocation, onRo
       subdomains: 'abcd',
     }).addTo(m);
 
+    // TomTom Traffic Flow — live traffic overlay (vert/orange/rouge)
+    const TOMTOM_KEY = '7DEkaP487zUjsgRTRzjRQ5b1QwdbGTsY';
+    L.tileLayer('https://api.tomtom.com/traffic/map/4/tile/flow/relative0/{z}/{x}/{y}.png?key=' + TOMTOM_KEY + '&tileSize=256', {
+      maxZoom: 20,
+      opacity: 0.7,
+      zIndex: 400,
+    }).addTo(m);
+
     // User marker - blue pulse
     const userIcon = L.divIcon({
       className: '',
@@ -233,19 +241,21 @@ function decodePolyline(encoded) {
   return coords;
 }
 
-// Native map with OSRM routing
+// Native map with Google Maps provider + OSRM routing
 function NativeMap({ userLocation, destination, nearbyDrivers, driverLocation }) {
-  let MapView, Marker, Polyline;
+  let MapView, Marker, Polyline, PROVIDER_GOOGLE;
   try {
     MapView = require('react-native-maps').default;
     const maps = require('react-native-maps');
     Marker = maps.Marker;
     Polyline = maps.Polyline;
+    PROVIDER_GOOGLE = maps.PROVIDER_GOOGLE;
   } catch (e) {
     // react-native-maps not available
     return <View style={StyleSheet.absoluteFillObject} />;
   }
 
+  const mapRef = React.useRef(null);
   const [routeCoords, setRouteCoords] = React.useState([]);
 
   React.useEffect(() => {
@@ -253,34 +263,66 @@ function NativeMap({ userLocation, destination, nearbyDrivers, driverLocation })
     const uLat = userLocation.latitude;
     const uLng = userLocation.longitude;
     fetchRoute(uLng, uLat, destination.lng, destination.lat).then(routeData => {
+      let coords;
       if (routeData?.geometry) {
         const decoded = decodePolyline(routeData.geometry);
-        setRouteCoords(decoded.map(([lat, lng]) => ({ latitude: lat, longitude: lng })));
+        coords = decoded.map(([lat, lng]) => ({ latitude: lat, longitude: lng }));
       } else {
-        // Fallback straight line
-        setRouteCoords([
+        coords = [
           { latitude: uLat, longitude: uLng },
           { latitude: destination.lat, longitude: destination.lng },
-        ]);
+        ];
+      }
+      setRouteCoords(coords);
+
+      // Fit route in view
+      if (mapRef.current && coords.length > 0) {
+        setTimeout(() => {
+          mapRef.current?.fitToCoordinates(coords, {
+            edgePadding: { top: 100, right: 50, bottom: 300, left: 50 },
+            animated: true,
+          });
+        }, 100);
       }
     });
   }, [destination?.lat, destination?.lng]);
 
+  // Dark mode style for Google Maps (like Uber/Bolt)
+  const darkMapStyle = [
+    { elementType: 'geometry', stylers: [{ color: '#1a1c20' }] },
+    { elementType: 'labels.text.stroke', stylers: [{ color: '#1a1c20' }] },
+    { elementType: 'labels.text.fill', stylers: [{ color: '#746855' }] },
+    { featureType: 'administrative.locality', elementType: 'labels.text.fill', stylers: [{ color: '#d59563' }] },
+    { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#d59563' }] },
+    { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#263c3f' }] },
+    { featureType: 'poi.park', elementType: 'labels.text.fill', stylers: [{ color: '#6b9a76' }] },
+    { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#2a2e35' }] },
+    { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#212a37' }] },
+    { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#9ca5b3' }] },
+    { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#3d4556' }] },
+    { featureType: 'road.highway', elementType: 'geometry.stroke', stylers: [{ color: '#1f2835' }] },
+    { featureType: 'road.highway', elementType: 'labels.text.fill', stylers: [{ color: '#f3d19c' }] },
+    { featureType: 'transit', elementType: 'geometry', stylers: [{ color: '#2f3948' }] },
+    { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#080a0d' }] },
+    { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#515c6d' }] },
+  ];
+
   return (
     <MapView
+      ref={mapRef}
+      provider={PROVIDER_GOOGLE}
       style={StyleSheet.absoluteFillObject}
+      customMapStyle={darkMapStyle}
+      showsUserLocation={true}
+      showsMyLocationButton={false}
+      showsCompass={false}
+      showsTraffic={true}
       initialRegion={{
         latitude: userLocation?.latitude || DAKAR_CENTER.lat,
         longitude: userLocation?.longitude || DAKAR_CENTER.lng,
         latitudeDelta: 0.05, longitudeDelta: 0.05,
       }}
     >
-      {userLocation && (
-        <Marker
-          coordinate={{ latitude: userLocation.latitude, longitude: userLocation.longitude }}
-          title="Ma position"
-        />
-      )}
       {destination && (
         <Marker
           coordinate={{ latitude: destination.lat, longitude: destination.lng }}
@@ -307,7 +349,7 @@ function NativeMap({ userLocation, destination, nearbyDrivers, driverLocation })
         <Polyline
           coordinates={routeCoords}
           strokeColor="#22C55E"
-          strokeWidth={4}
+          strokeWidth={5}
         />
       )}
     </MapView>

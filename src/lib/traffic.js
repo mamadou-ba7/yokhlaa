@@ -1,14 +1,13 @@
 /**
  * TomTom Traffic API + Routing intelligent pour Dakar
- * - ETA temps réel avec trafic
+ * - ETA temps réel avec trafic (proxifié via Edge Function pour protéger la clé)
  * - Surge pricing basé sur la congestion
  * - Fallback OSRM si TomTom indisponible
  */
 
-const TOMTOM_API_KEY = '9w6L2Sw8M8eOnAWzsnD4IyPhLF9ul3aV';
+import { supabase } from './supabase';
 
 const OSRM_BASE = 'https://router.project-osrm.org/route/v1/driving';
-const TOMTOM_BASE = 'https://api.tomtom.com';
 
 // Zones connues de congestion à Dakar (lat, lng, rayon en km)
 const CONGESTION_ZONES = [
@@ -27,18 +26,15 @@ const PEAK_HOURS = {
 };
 
 /**
- * Calculer l'ETA avec le trafic TomTom
+ * Calculer l'ETA avec le trafic TomTom (via Edge Function proxy)
  * Fallback sur OSRM si TomTom échoue
  */
 export async function getRouteWithTraffic(fromLat, fromLng, toLat, toLng) {
-  // Essayer TomTom d'abord
-  if (TOMTOM_API_KEY !== 'VOTRE_CLE_TOMTOM') {
-    try {
-      const result = await fetchTomTomRoute(fromLat, fromLng, toLat, toLng);
-      if (result) return result;
-    } catch (e) {
-      console.warn('TomTom fallback to OSRM:', e.message);
-    }
+  try {
+    const result = await fetchTomTomRoute(fromLat, fromLng, toLat, toLng);
+    if (result) return result;
+  } catch (e) {
+    console.warn('TomTom fallback to OSRM:', e.message);
   }
 
   // Fallback OSRM + estimation trafic locale
@@ -46,45 +42,23 @@ export async function getRouteWithTraffic(fromLat, fromLng, toLat, toLng) {
 }
 
 /**
- * TomTom Routing API avec trafic temps réel
+ * TomTom Routing API via Edge Function proxy (clé côté serveur)
  */
 async function fetchTomTomRoute(fromLat, fromLng, toLat, toLng) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8000);
+  const { data, error } = await supabase.functions.invoke('tomtom-route', {
+    body: {
+      action: 'route',
+      from_lat: fromLat,
+      from_lng: fromLng,
+      to_lat: toLat,
+      to_lng: toLng,
+    },
+  });
 
-  const url = `${TOMTOM_BASE}/routing/1/calculateRoute/${fromLat},${fromLng}:${toLat},${toLng}/json` +
-    `?key=${TOMTOM_API_KEY}` +
-    `&traffic=true` +
-    `&travelMode=car` +
-    `&departAt=now`;
+  if (error) throw new Error(error.message || 'TomTom proxy error');
+  if (!data || data.error) return null;
 
-  const res = await fetch(url, { signal: controller.signal });
-  clearTimeout(timeout);
-  const data = await res.json();
-
-  if (!data.routes?.[0]) return null;
-
-  const route = data.routes[0].summary;
-  const distanceKm = Math.round((route.lengthInMeters / 1000) * 10) / 10;
-  const etaMinutes = Math.max(3, Math.round(route.travelTimeInSeconds / 60));
-
-  // TomTom peut retourner noTrafficTravelTimeInSeconds ou trafficDelayInSeconds
-  const trafficDelaySec = route.trafficDelayInSeconds || 0;
-  const etaNoTraffic = route.noTrafficTravelTimeInSeconds
-    ? Math.round(route.noTrafficTravelTimeInSeconds / 60)
-    : Math.max(1, Math.round((route.travelTimeInSeconds - trafficDelaySec) / 60));
-
-  // Ratio de congestion : temps avec trafic / temps sans trafic
-  const congestionRatio = etaNoTraffic > 0 ? etaMinutes / etaNoTraffic : 1;
-
-  return {
-    distanceKm,
-    etaMinutes,
-    etaNoTraffic,
-    congestionRatio,
-    trafficDelay: Math.max(0, etaMinutes - etaNoTraffic),
-    source: 'tomtom',
-  };
+  return data;
 }
 
 /**
@@ -240,30 +214,16 @@ export function getTrafficLevel(congestionRatio) {
 }
 
 /**
- * Récupérer les incidents de trafic TomTom pour la zone de Dakar
+ * Récupérer les incidents de trafic TomTom pour Dakar (via Edge Function)
  */
 export async function getTrafficIncidents() {
-  if (TOMTOM_API_KEY === 'VOTRE_CLE_TOMTOM') return [];
-
   try {
-    // Bounding box de Dakar
-    const bbox = '-17.55,14.63,-17.25,14.81';
-    const url = `${TOMTOM_BASE}/traffic/services/5/incidentDetails` +
-      `?key=${TOMTOM_API_KEY}` +
-      `&bbox=${bbox}` +
-      `&fields={incidents{type,geometry{type,coordinates},properties{iconCategory,magnitudeOfDelay,events{description},from,to}}}` +
-      `&language=fr-FR`;
+    const { data, error } = await supabase.functions.invoke('tomtom-route', {
+      body: { action: 'incidents' },
+    });
 
-    const res = await fetch(url);
-    const data = await res.json();
-
-    return (data.incidents || []).map(inc => ({
-      type: inc.properties?.iconCategory,
-      delay: inc.properties?.magnitudeOfDelay,
-      description: inc.properties?.events?.[0]?.description || '',
-      from: inc.properties?.from,
-      to: inc.properties?.to,
-    }));
+    if (error || !data?.incidents) return [];
+    return data.incidents;
   } catch (e) {
     console.warn('Traffic incidents error:', e);
     return [];

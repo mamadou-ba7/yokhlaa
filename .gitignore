@@ -9,6 +9,17 @@ dist/
 *.orig.*
 web-build/
 
+# Native build output (regenerated via expo prebuild)
+ios/
+android/
+
+# Backup files
+app.json.backup
+*.backup
+
+# Supabase local/temp
+supabase/.temp/
+
 # Secrets
 .env
 .env.local

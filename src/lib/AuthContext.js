@@ -37,6 +37,19 @@ export function AuthProvider({ children }) {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Realtime: ecouter les updates du profil (ex: subscription_active flip par webhook)
+  useEffect(() => {
+    if (!user?.id) return;
+    const ch = supabase.channel(`profile-${user.id}`)
+      .on('postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${user.id}` },
+        (payload) => {
+          if (payload.new) setProfile(payload.new);
+        })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [user?.id]);
+
   const fetchProfile = useCallback(async (userId) => {
     try {
       const { data, error } = await supabase
