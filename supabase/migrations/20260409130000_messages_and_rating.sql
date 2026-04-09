@@ -1,9 +1,7 @@
 -- ============================================
--- YOKH LAA - Messages Table (Chat in-app)
--- Run this in Supabase SQL Editor
+-- Chat messages + rating columns (deja applique)
 -- ============================================
 
--- Table messages pour le chat passager <-> chauffeur
 CREATE TABLE IF NOT EXISTS messages (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   ride_id UUID REFERENCES rides(id) NOT NULL,
@@ -13,10 +11,9 @@ CREATE TABLE IF NOT EXISTS messages (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Enable RLS
 ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
 
--- Policies: only ride participants can read/write messages
+DROP POLICY IF EXISTS "Ride participants can read messages" ON messages;
 CREATE POLICY "Ride participants can read messages" ON messages
   FOR SELECT TO authenticated USING (
     EXISTS (
@@ -26,6 +23,7 @@ CREATE POLICY "Ride participants can read messages" ON messages
     )
   );
 
+DROP POLICY IF EXISTS "Ride participants can send messages" ON messages;
 CREATE POLICY "Ride participants can send messages" ON messages
   FOR INSERT TO authenticated WITH CHECK (
     sender_id = auth.uid()
@@ -36,19 +34,16 @@ CREATE POLICY "Ride participants can send messages" ON messages
     )
   );
 
+DROP POLICY IF EXISTS "Sender can update own messages" ON messages;
 CREATE POLICY "Sender can update own messages" ON messages
   FOR UPDATE TO authenticated USING (sender_id = auth.uid());
 
--- Indexes
 CREATE INDEX IF NOT EXISTS idx_messages_ride ON messages(ride_id);
 CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(ride_id, created_at);
 
--- Enable realtime for messages
 ALTER PUBLICATION supabase_realtime ADD TABLE messages;
 
--- ============================================
--- Migration: update profiles for rating system
--- ============================================
+-- Rating columns
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS rating_count INTEGER DEFAULT 0;
 ALTER TABLE rides ADD COLUMN IF NOT EXISTS rating_comment_driver TEXT;
 ALTER TABLE rides ADD COLUMN IF NOT EXISTS rating_passenger SMALLINT;
